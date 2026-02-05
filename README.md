@@ -6,11 +6,14 @@ A real-time bike availability tracker for [Xpert Moto](https://xpertmoto.com.au)
 
 ## ✨ Features
 
+- **Progressive Loading** - Table appears immediately with bike info while availability loads in background with animated skeleton states
 - **Real-time Availability Tracking** - Live synchronization with Izyrent booking system
+- **Interactive Date Filtering** - Click date headers to filter bikes available on specific dates (supports multiple selections with OR logic)
 - **30-Day Calendar View** - Visual grid showing availability status for the next month
 - **Dynamic Pricing Calculator** - Select rental duration (1 day to 4+ weeks) with automatic bulk pricing
 - **Price Sorting** - Sort fleet by price (ascending/descending) for any duration
 - **Bike Thumbnails** - Visual identification with motorcycle images
+- **Direct Booking Links** - Click any bike name to open its booking page on xpertmoto.com.au
 - **Status Indicators**
   - 🟢 **Available** - Ready to rent
   - 🔴 **Booked** - Currently reserved

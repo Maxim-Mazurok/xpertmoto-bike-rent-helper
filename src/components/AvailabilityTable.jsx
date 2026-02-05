@@ -209,7 +209,15 @@ const AvailabilityTable = ({ bikes, globalSettings, duration, sortOrder, onSortC
                                             </div>
                                         )}
                                         <div>
-                                            <div className="font-bold text-sm truncate max-w-[150px]" title={bike.name}>{bike.name}</div>
+                                            <a
+                                                href={`https://xpertmoto.com.au/products/${bike.handle}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="font-bold text-sm truncate max-w-[150px] hover:text-emerald-400 transition-colors inline-block"
+                                                title={`${bike.name} - Click to book`}
+                                            >
+                                                {bike.name}
+                                            </a>
                                             <div className="text-[10px] text-slate-500 mt-1 flex items-center gap-2">
                                                 <span className="px-1 py-0.5 rounded border border-white/10 bg-white/5 font-mono">ID: {bike.variantId.slice(-4)}</span>
                                             </div>
