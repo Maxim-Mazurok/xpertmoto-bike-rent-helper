@@ -104,17 +104,33 @@ Example for YAMAHA NMAX155:
 
 ## 🌐 Deployment
 
-### Vercel (Recommended)
-
-This project is optimized for Vercel's static deployment:
-
-1. Push your code to GitHub
-2. Import the repository in Vercel
-3. Vercel will auto-detect the Vite configuration
-4. Ensure `public/example.json` is committed (or add as environment file)
-5. Deploy!
-
-**No serverless functions needed** - everything runs in the browser!
+### GitHub Pages (Automated Guide)
+ 
+ This repository is configured to automatically deploy to GitHub Pages using GitHub Actions.
+ 
+ 1. **Commit & Push**
+    Simply push your code to the `main` or `master` branch.
+ 
+ 2. **Configure Repository Settings**
+    - Go to your repository on GitHub.
+    - Navigate to **Settings** > **Pages**.
+    - Under **Build and deployment**, select **GitHub Actions** as the source.
+ 
+ 3. **Verify Deployment**
+    - The `Deploy to GitHub Pages` workflow will run automatically.
+    - Once completed, your site will be live at `https://yourusername.github.io/xpertmoto-bike-rent-helper/`.
+ 
+ ### Vercel / Netlify / Other Static Hosts
+ 
+ Since this is a pure static site, it can be deployed anywhere:
+ 
+ 1. Connect your repository to Vercel/Netlify.
+ 2. Framework preset: **Vite**
+ 3. Build command: `npm run build`
+ 4. Output directory: `dist`
+ 5. Deploy!
+ 
+ **Note:** Ensure `public/example.json` is included in the deployment.
 
 ### Alternative: Any Static Host
 

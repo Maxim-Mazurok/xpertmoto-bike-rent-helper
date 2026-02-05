@@ -20,7 +20,13 @@ function App() {
         async function loadData() {
             try {
                 // Fetch the example.json file
-                const exampleResponse = await fetch('/example.json');
+                // Use import.meta.env.BASE_URL to handle deployment in subdirectories
+                // remove trailing slash if present to avoid double slashes
+                const baseUrl = import.meta.env.BASE_URL.endsWith('/')
+                    ? import.meta.env.BASE_URL
+                    : `${import.meta.env.BASE_URL}/`;
+
+                const exampleResponse = await fetch(`${baseUrl}example.json`);
                 const exampleData = await exampleResponse.json();
 
                 // Fetch product images first
