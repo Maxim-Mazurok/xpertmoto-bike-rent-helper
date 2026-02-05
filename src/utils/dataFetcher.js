@@ -53,9 +53,7 @@ async function fetchBookings(product) {
         const response = await axios.post(IZYRENT_API_URL, payload, {
             timeout: 10000,
             headers: {
-                'Content-Type': 'text/plain;charset=UTF-8',
-                'Origin': window.location.origin,
-                'Referer': window.location.origin + '/'
+                'Content-Type': 'text/plain;charset=UTF-8'
             }
         });
 
@@ -80,6 +78,8 @@ export async function fetchAvailabilityData(exampleData) {
 
     // Extract unique products from example.json
     const products = [];
+    const seenVariantIds = new Set();
+
     Object.entries(exampleData.data).forEach(([key, product]) => {
         if (!product) return;
 
@@ -89,6 +89,13 @@ export async function fetchAvailabilityData(exampleData) {
 
             Object.entries(variants).forEach(([variantId, variantData]) => {
                 if (variantId === 'product') return;
+
+                // Skip if we've already seen this variantId
+                if (seenVariantIds.has(variantId)) {
+                    console.log(`[Fetch] Skipping duplicate variant: ${variantId}`);
+                    return;
+                }
+                seenVariantIds.add(variantId);
 
                 const variantPrices = variantData.prices || [];
 
@@ -108,7 +115,7 @@ export async function fetchAvailabilityData(exampleData) {
         }
     });
 
-    console.log(`[Fetch] Found ${products.length} bike variants`);
+    console.log(`[Fetch] Found ${products.length} unique bike variants`);
 
     // Fetch bookings for each product
     const availability = [];
