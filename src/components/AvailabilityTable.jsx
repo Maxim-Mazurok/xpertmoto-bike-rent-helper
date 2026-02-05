@@ -1,14 +1,21 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { format, addDays, isSameDay, parseISO, getDay } from 'date-fns';
 import { clsx } from 'clsx';
 import { Calendar, Info, CheckCircle2, XCircle, Clock, Bike, TrendingUp } from 'lucide-react';
 
-const AvailabilityTable = ({ data, duration, sortOrder, onSortChange, days = 30 }) => {
+const AvailabilityTable = ({ bikes, globalSettings, duration, sortOrder, onSortChange, days = 30 }) => {
+    const [selectedDates, setSelectedDates] = useState(new Set());
+
     const dates = useMemo(() => {
         return Array.from({ length: days }).map((_, i) => addDays(new Date(), i));
     }, [days]);
 
     const getStatus = (bike, date) => {
+        // If bike is still loading, return loading state
+        if (bike.isLoading || !bike.bookings) {
+            return 'loading';
+        }
+
         const yearMonthDay = format(date, 'yyyy/MM/dd');
         const dayOfWeek = getDay(date); // 0 = Sunday, 6 = Saturday
 
@@ -18,8 +25,8 @@ const AvailabilityTable = ({ data, duration, sortOrder, onSortChange, days = 30 
         const dayNumeric = date.getDate();
 
         // Check global holiday list
-        const isHoliday = data.globalSettings.disabledDatesGlobal[year]?.[month]?.includes(dayNumeric);
-        const isStoreClosed = data.globalSettings.closures.includes(dayOfWeek) || isHoliday;
+        const isHoliday = globalSettings.disabledDatesGlobal[year]?.[month]?.includes(dayNumeric);
+        const isStoreClosed = globalSettings.closures.includes(dayOfWeek) || isHoliday;
 
         // 2. Check Bookings
         // Response keys can be "2026/02/27", "2026/02/27_start", or "2026/02/27_end"
@@ -75,7 +82,25 @@ const AvailabilityTable = ({ data, duration, sortOrder, onSortChange, days = 30 
     };
 
     const sortedBikes = useMemo(() => {
-        return [...data.availability].sort((a, b) => {
+        let filteredBikes = [...bikes];
+
+        // Apply date filtering if any dates are selected
+        if (selectedDates.size > 0) {
+            filteredBikes = filteredBikes.filter(bike => {
+                // Check if bike is available on ANY of the selected dates (OR logic)
+                return dates.some(date => {
+                    const dateKey = format(date, 'yyyy-MM-dd');
+                    if (!selectedDates.has(dateKey)) return false;
+
+                    const status = getStatus(bike, date);
+                    // Include bikes that are available or half-day available
+                    return status === 'available' || status === 'half';
+                });
+            });
+        }
+
+        // Apply sorting
+        return filteredBikes.sort((a, b) => {
             if (sortOrder === 'asc' || sortOrder === 'desc') {
                 const priceA = getPriceForDuration(a, duration);
                 const priceB = getPriceForDuration(b, duration);
@@ -83,10 +108,12 @@ const AvailabilityTable = ({ data, duration, sortOrder, onSortChange, days = 30 
             }
             return a.name.localeCompare(b.name);
         });
-    }, [data.availability, duration, sortOrder]);
+    }, [bikes, duration, sortOrder, selectedDates, dates]);
 
     const getStatusColor = (status) => {
         switch (status) {
+            case 'loading':
+                return 'bg-slate-800/40 animate-pulse';
             case 'available':
                 return 'bg-emerald-500/20 hover:bg-emerald-500/40';
             case 'booked':
@@ -102,6 +129,19 @@ const AvailabilityTable = ({ data, duration, sortOrder, onSortChange, days = 30 
 
     const toggleSort = () => {
         onSortChange(sortOrder === 'asc' ? 'desc' : 'asc');
+    };
+
+    const toggleDateFilter = (date) => {
+        const dateKey = format(date, 'yyyy-MM-dd');
+        setSelectedDates(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(dateKey)) {
+                newSet.delete(dateKey);
+            } else {
+                newSet.add(dateKey);
+            }
+            return newSet;
+        });
     };
 
     return (
@@ -125,12 +165,33 @@ const AvailabilityTable = ({ data, duration, sortOrder, onSortChange, days = 30 
                                     <TrendingUp size={14} className={clsx(sortOrder === 'desc' && "rotate-180", "transition-transform")} />
                                 </button>
                             </th>
-                            {dates.map((date) => (
-                                <th key={date.toISOString()} className="p-2 border-r border-white/5 min-w-[50px] text-center">
-                                    <div className="text-[10px] text-slate-500 font-bold uppercase">{format(date, 'EEE')}</div>
-                                    <div className="text-sm font-bold">{format(date, 'dd')}</div>
-                                </th>
-                            ))}
+                            {dates.map((date) => {
+                                const dateKey = format(date, 'yyyy-MM-dd');
+                                const isSelected = selectedDates.has(dateKey);
+                                return (
+                                    <th key={date.toISOString()} className="p-0 border-r border-white/5 min-w-[50px]">
+                                        <button
+                                            onClick={() => toggleDateFilter(date)}
+                                            className={clsx(
+                                                "w-full p-2 text-center transition-colors duration-200",
+                                                isSelected
+                                                    ? "bg-emerald-500/20 hover:bg-emerald-500/30"
+                                                    : "hover:bg-white/5"
+                                            )}
+                                            title={isSelected ? "Click to deselect filter" : "Click to filter by this date"}
+                                        >
+                                            <div className={clsx(
+                                                "text-[10px] font-bold uppercase",
+                                                isSelected ? "text-emerald-400" : "text-slate-500"
+                                            )}>{format(date, 'EEE')}</div>
+                                            <div className={clsx(
+                                                "text-sm font-bold",
+                                                isSelected ? "text-emerald-300" : "text-white"
+                                            )}>{format(date, 'dd')}</div>
+                                        </button>
+                                    </th>
+                                );
+                            })}
                         </tr>
                     </thead>
                     <tbody>
@@ -165,6 +226,8 @@ const AvailabilityTable = ({ data, duration, sortOrder, onSortChange, days = 30 
                                 </td>
                                 {dates.map((date) => {
                                     const status = getStatus(bike, date);
+                                    const isLoading = status === 'loading';
+
                                     return (
                                         <td
                                             key={date.toISOString()}
@@ -172,13 +235,24 @@ const AvailabilityTable = ({ data, duration, sortOrder, onSortChange, days = 30 
                                                 "p-0 border-r border-white/5",
                                             )}
                                         >
-                                            <div
-                                                className={clsx(
-                                                    "w-full h-10 transition-colors duration-200 cursor-help",
-                                                    getStatusColor(status)
-                                                )}
-                                                title={`${bike.name}\n${format(date, 'PPPP')}\nStatus: ${status.replace(/^\w/, c => c.toUpperCase())}`}
-                                            />
+                                            {isLoading ? (
+                                                <div className="w-full h-10 relative overflow-hidden bg-slate-800/20">
+                                                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-slate-700/20 to-transparent animate-shimmer"
+                                                        style={{
+                                                            animation: 'shimmer 1.5s infinite',
+                                                            backgroundSize: '200% 100%'
+                                                        }}
+                                                    />
+                                                </div>
+                                            ) : (
+                                                <div
+                                                    className={clsx(
+                                                        "w-full h-10 transition-colors duration-200 cursor-help",
+                                                        getStatusColor(status)
+                                                    )}
+                                                    title={`${bike.name}\n${format(date, 'PPPP')}\nStatus: ${status.replace(/^\w/, c => c.toUpperCase())}`}
+                                                />
+                                            )}
                                         </td>
                                     );
                                 })}

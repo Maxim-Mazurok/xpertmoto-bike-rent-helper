@@ -12,7 +12,7 @@ const SHOP_DOMAIN = '7f13fc-4d.myshopify.com';
 /**
  * Fetches product images from Shopify
  */
-async function fetchProductImages() {
+export async function fetchProductImages() {
     try {
         const response = await axios.get(SHOPIFY_PRODUCTS_URL);
         const imageMap = {};
@@ -65,19 +65,16 @@ async function fetchBookings(product) {
 }
 
 /**
- * Main function to fetch all availability data
+ * Extracts bike metadata synchronously from example.json
+ * Returns immediately with bike info (names, images, pricing) but no bookings
  * @param {Object} exampleData - The parsed example.json data
- * @returns {Promise<Object>} Aggregated availability data
+ * @param {Object} imageMap - Pre-fetched product images from Shopify
+ * @returns {Object} Initial bike data with global settings
  */
-export async function fetchAvailabilityData(exampleData) {
-    console.log('[Fetch] Starting data aggregation...');
+export function extractBikeMetadata(exampleData, imageMap) {
+    console.log('[Fetch] Extracting bike metadata...');
 
-    // Fetch product images
-    console.log('[Fetch] Fetching product images from Shopify...');
-    const imageMap = await fetchProductImages();
-
-    // Extract unique products from example.json
-    const products = [];
+    const bikes = [];
     const seenVariantIds = new Set();
 
     Object.entries(exampleData.data).forEach(([key, product]) => {
@@ -99,7 +96,7 @@ export async function fetchAvailabilityData(exampleData) {
 
                 const variantPrices = variantData.prices || [];
 
-                products.push({
+                bikes.push({
                     handle: product.handle,
                     productId: product.id.split('/').pop(),
                     variantId: variantId,
@@ -107,7 +104,9 @@ export async function fetchAvailabilityData(exampleData) {
                     stock: parseInt(variantData.stock || 1),
                     imageUrl: imageMap[product.handle] || null,
                     pricing: variantPrices,
-                    metafields: metafields
+                    metafields: metafields,
+                    bookings: undefined, // Will be populated progressively
+                    isLoading: true
                 });
             });
         } catch (e) {
@@ -115,22 +114,88 @@ export async function fetchAvailabilityData(exampleData) {
         }
     });
 
-    console.log(`[Fetch] Found ${products.length} unique bike variants`);
+    const globalSettings = extractGlobalSettings(exampleData);
 
-    // Fetch bookings for each product
-    const availability = [];
-    for (const product of products) {
-        console.log(`[Fetch] Fetching bookings for ${product.name}...`);
-        const bookings = await fetchBookings(product);
+    console.log(`[Fetch] Extracted ${bikes.length} bike variants`);
 
-        availability.push({
-            ...product,
-            bookings: bookings
-        });
+    return {
+        bikes,
+        globalSettings,
+        lastUpdated: new Date().toISOString()
+    };
+}
+
+/**
+ * Fetches bookings progressively with callbacks for each completed bike
+ * @param {Array} bikes - Bike metadata array
+ * @param {Object} callbacks - { onBikeUpdate, onProgress, onComplete }
+ */
+export async function fetchBookingsProgressively(bikes, { onBikeUpdate, onProgress, onComplete }) {
+    console.log('[Fetch] Starting progressive booking fetch...');
+
+    const total = bikes.length;
+
+    for (let i = 0; i < bikes.length; i++) {
+        const bike = bikes[i];
+        console.log(`[Fetch] Fetching bookings for ${bike.name}... (${i + 1}/${total})`);
+
+        // Report progress
+        if (onProgress) {
+            onProgress({ current: i + 1, total, name: bike.name });
+        }
+
+        const bookings = await fetchBookings(bike);
+
+        // Call update callback with completed bike data
+        if (onBikeUpdate) {
+            onBikeUpdate(bike.variantId, {
+                bookings,
+                isLoading: false
+            });
+        }
     }
 
-    // Fetch global settings (closures, holidays)
-    const globalSettings = extractGlobalSettings(exampleData);
+    console.log('[Fetch] All bookings fetched!');
+
+    if (onComplete) {
+        onComplete();
+    }
+}
+
+/**
+ * Legacy function for backward compatibility
+ * @deprecated Use extractBikeMetadata + fetchBookingsProgressively instead
+ */
+export async function fetchAvailabilityData(exampleData, onProgress = null) {
+    console.log('[Fetch] Starting data aggregation...');
+
+    // Fetch product images
+    console.log('[Fetch] Fetching product images from Shopify...');
+    const imageMap = await fetchProductImages();
+
+    // Extract metadata
+    const { bikes, globalSettings } = extractBikeMetadata(exampleData, imageMap);
+
+    // Fetch bookings synchronously
+    const availability = [];
+    const total = bikes.length;
+
+    for (let i = 0; i < bikes.length; i++) {
+        const bike = bikes[i];
+        console.log(`[Fetch] Fetching bookings for ${bike.name}... (${i + 1}/${total})`);
+
+        if (onProgress) {
+            onProgress({ current: i + 1, total, name: bike.name });
+        }
+
+        const bookings = await fetchBookings(bike);
+
+        availability.push({
+            ...bike,
+            bookings: bookings,
+            isLoading: false
+        });
+    }
 
     console.log('[Fetch] Data aggregation complete!');
 

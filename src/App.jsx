@@ -4,10 +4,16 @@ import { Bike, RefreshCw, Filter, TrendingUp } from 'lucide-react';
 
 function App() {
     const [data, setData] = useState(null);
-    const [loading, setLoading] = useState(true);
+    const [bikes, setBikes] = useState([]);
+    const [globalSettings, setGlobalSettings] = useState(null);
     const [error, setError] = useState(null);
     const [duration, setDuration] = useState(1); // Default to 1 day
     const [sortOrder, setSortOrder] = useState('asc'); // 'asc' or 'desc'
+    const [loadingStatus, setLoadingStatus] = useState({
+        loaded: 0,
+        total: 0,
+        isComplete: false
+    });
 
     useEffect(() => {
         // Fetch example.json and then aggregate availability data
@@ -17,32 +23,51 @@ function App() {
                 const exampleResponse = await fetch('/example.json');
                 const exampleData = await exampleResponse.json();
 
-                // Fetch and aggregate all availability data
-                const { fetchAvailabilityData } = await import('./utils/dataFetcher');
-                const availabilityData = await fetchAvailabilityData(exampleData);
+                // Fetch product images first
+                const { fetchProductImages, extractBikeMetadata, fetchBookingsProgressively } = await import('./utils/dataFetcher');
+                const imageMap = await fetchProductImages();
 
-                setData(availabilityData);
-                setLoading(false);
+                // Extract bike metadata immediately (synchronous)
+                const initialData = extractBikeMetadata(exampleData, imageMap);
+
+                // Set initial state - table will appear immediately
+                setBikes(initialData.bikes);
+                setGlobalSettings(initialData.globalSettings);
+                setData({ lastUpdated: initialData.lastUpdated });
+                setLoadingStatus({ loaded: 0, total: initialData.bikes.length, isComplete: false });
+
+                // Fetch bookings progressively
+                fetchBookingsProgressively(initialData.bikes, {
+                    onBikeUpdate: (variantId, bookingData) => {
+                        setBikes(prevBikes =>
+                            prevBikes.map(bike =>
+                                bike.variantId === variantId
+                                    ? { ...bike, ...bookingData }
+                                    : bike
+                            )
+                        );
+                    },
+                    onProgress: (progressInfo) => {
+                        setLoadingStatus({
+                            loaded: progressInfo.current,
+                            total: progressInfo.total,
+                            isComplete: false
+                        });
+                    },
+                    onComplete: () => {
+                        setLoadingStatus(prev => ({ ...prev, isComplete: true }));
+                        setData(prevData => ({ ...prevData, lastUpdated: new Date().toISOString() }));
+                    }
+                });
+
             } catch (err) {
                 console.error('Failed to load availability data:', err);
                 setError('Failed to load data. Please ensure example.json is in the public folder.');
-                setLoading(false);
             }
         }
 
         loadData();
     }, []);
-
-    if (loading) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-slate-950">
-                <div className="flex flex-col items-center gap-4">
-                    <RefreshCw className="text-status-available animate-spin" size={48} />
-                    <p className="text-slate-400 animate-pulse">Synchronizing fleet data...</p>
-                </div>
-            </div>
-        );
-    }
 
     if (error) {
         return (
@@ -59,6 +84,9 @@ function App() {
         );
     }
 
+    // Show table even if bikes aren't fully loaded yet
+    const hasData = bikes.length > 0 && globalSettings && data;
+
     return (
         <div className="min-h-screen flex flex-col">
             <header className="glass-header px-6 py-4">
@@ -72,10 +100,23 @@ function App() {
                                 Fleet Availability Tracker
                             </h1>
                         </div>
-                        <p className="text-slate-400 font-medium flex items-center gap-2">
-                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                            Live synchronization with Xpert Moto fleet
-                        </p>
+                        <div className="flex items-center gap-3">
+                            {!loadingStatus.isComplete && hasData ? (
+                                <>
+                                    <RefreshCw className="text-emerald-500 animate-spin" size={14} />
+                                    <p className="text-slate-400 font-medium text-sm">
+                                        Syncing availability: {loadingStatus.loaded}/{loadingStatus.total} bikes
+                                    </p>
+                                </>
+                            ) : (
+                                <>
+                                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                                    <p className="text-slate-400 font-medium">
+                                        Live synchronization with Xpert Moto fleet
+                                    </p>
+                                </>
+                            )}
+                        </div>
                     </div>
 
                     <div className="flex flex-col gap-2">
@@ -97,27 +138,30 @@ function App() {
                 </div>
             </header>
 
-            <main className="flex-1 p-6 max-w-[1600px] mx-auto w-full space-y-6">
-                <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
-                    <div>
-                        <h2 className="text-2xl font-bold">Bike Availability</h2>
-                        <p className="text-slate-400 text-sm mt-1">Live status for the next 30 days across technical variants.</p>
+            {hasData && (
+                <main className="flex-1 p-6 max-w-[1600px] mx-auto w-full space-y-6">
+                    <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
+                        <div>
+                            <h2 className="text-2xl font-bold">Bike Availability</h2>
+                            <p className="text-slate-400 text-sm mt-1">Live status for the next 30 days across technical variants.</p>
+                        </div>
                     </div>
-                </div>
 
-                <AvailabilityTable
-                    data={data}
-                    duration={duration}
-                    sortOrder={sortOrder}
-                    onSortChange={setSortOrder}
-                />
+                    <AvailabilityTable
+                        bikes={bikes}
+                        globalSettings={globalSettings}
+                        duration={duration}
+                        sortOrder={sortOrder}
+                        onSortChange={setSortOrder}
+                    />
 
-                <footer className="py-8 text-center border-t border-white/5">
-                    <p className="text-[10px] text-slate-600 uppercase tracking-widest font-bold">
-                        Dashboard generated at {new Date(data.lastUpdated).toLocaleString()}
-                    </p>
-                </footer>
-            </main>
+                    <footer className="py-8 text-center border-t border-white/5">
+                        <p className="text-[10px] text-slate-600 uppercase tracking-widest font-bold">
+                            Dashboard generated at {new Date(data.lastUpdated).toLocaleString()}
+                        </p>
+                    </footer>
+                </main>
+            )}
         </div>
     );
 }
